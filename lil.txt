@@ -1,0 +1,116 @@
+#define BLYNK_PRINTSerial 
+#define "TMPL3Q1y8Un7a" BLYNK_TEMPLATE_ID 
+#define BLYNK_TEMPLATE_NAME "Driver Safety"
+#define BLYNK_AUTH_TOKEN "zKyFZ_ijUVou98EeyxVyMiSjsRds_HG"
+#include <WiFi.h> 
+#include <BlynkSimpleEsp32.h>
+#include <Wire.h> 
+#include <MPU6050.h>
+#include <Adafruit_GFX.h> #include <Adafruit_SSD1306.h>
+char ssid[] = "Airtel_shan_6791";
+char pass[] = "Air@90242"; 
+MPU6050mpu; BlynkTimer timer; 
+// OLED TwoWireI2C_OLED=TwoWire(1); 
+Adafruit_SSD1306 display(128, 64, &I2C_OLED,-1); 
+int16_t ax, ay, az; 
+int prev_ax = 0; 
+int prev_ay = 0; 
+int zigzag_count = 0; 
+// MQ2 #define MQ2_DO27 
+// MOTOR #define ENA25 
+#define IN1 26 #define IN2 33 
+// BUZZER #define BUZZER14 String prev_display = ""; 
+// Alert flags bool alcoholAlertSent = false;
+bool rashAlertSent = false; 
+bool zigzagAlertSent = false; 
+void sendData() { mpu.getAcceleration(&ax, &ay, &az); 
+String status = ""; int diff_ax = abs(ax- prev_ax); 
+int diff_ay = abs(ay- prev_ay); 
+if ((prev_ay > 2000 && ay <-2000) || (prev_ay <-2000&&ay>2000)){ zigzag_count++; 
+} else if (abs(ay) < 1200) { zigzag_count = 0; 
+} if (zigzag_count >= 2) { status = "ZIGZAG"; 
+if(!zigzagAlertSent){ Blynk.logEvent("zigzag_alert"); 
+zigzagAlertSent = true; 
+} } else if ((diff_ax > 8000 && abs(ax) > 4000) || (diff_ay > 8000 && abs(ay) > 4000)) { status = "RASH"; 
+if(!rashAlertSent){ Blynk.logEvent("rash_alert"); 
+rashAlertSent = true; 
+} } else if (abs(ax) < 1000 && abs(ay) < 1000 && diff_ax < 800&&diff_ay< 800){ status = "NORMAL"; 
+rashAlertSent = false;
+zigzagAlertSent = false;
+}
+else { status = "HIGH"; 
+} prev_ax = ax; 
+prev_ay = ay; 
+int alcohol = digitalRead(MQ2_DO); 
+String alcohol_status = ""; 
+if (alcohol == LOW) { alcohol_status = "DETECTED"; 
+analogWrite(ENA,120); 
+digitalWrite(BUZZER,HIGH); 
+if(!alcoholAlertSent){ Blynk.logEvent("alcohol_alert"); 
+alcoholAlertSent = true; 
+} } else { alcohol_status = "SAFE"; 
+analogWrite(ENA,255); 
+digitalWrite(BUZZER,LOW); 
+alcoholAlertSent = false; } //---------- BLYNK LABELS---------Blynk.virtualWrite(V0, alcohol_status); 
+Blynk.virtualWrite(V1, status); //---------- BLYNK LED ONLY FOR ALCOHOL---------if(alcohol_status == "SAFE") { Blynk.virtualWrite(V2, 255); 
+// Green LED ON OFF } Blynk.virtualWrite(V3, 0); 
+else { Blynk.virtualWrite(V2, 0); //---------- OLED DISPLAY---------String display_text = status + alcohol_status; if (display_text != prev_display) { display.clearDisplay(); 
+display.setTextSize(1); 
+display.setCursor(0,10); 
+display.print("STATUS: "); 
+display.println(status); 
+display.setCursor(0,30); 
+display.print("ALCOHOL: "); 
+display.println(alcohol_status); 
+display.display(); 
+prev_display = display_text; 
+} } void setup() { Serial.begin(115200); 
+Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass); 
+Wire.begin(21,22); mpu.initialize(); 
+I2C_OLED.begin(18,19); 
+if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { Serial.println("OLED NOT FOUND"); 
+while(true); } display.clearDisplay(); 
+display.setTextSize(1); 
+display.setTextColor(WHITE); 
+display.setCursor(10,20); 
+// Red LED // Green LED display.println("System Ready"); 
+display.display(); delay(2000); 
+pinMode(MQ2_DO,INPUT);  OFF
+Blynk.virtualWrite(V3, 255); // Red LED ON
+}
+//---------- OLED DISPLAY---------String display_text = status + alcohol_status; 
+if (display_text != prev_display) { display.clearDisplay(); 
+display.setTextSize(1); 
+display.setCursor(0,10); 
+display.print("STATUS: "); 
+display.println(status); 
+display.setCursor(0,30); 
+display.print("ALCOHOL: "); 
+display.println(alcohol_status); 
+display.display(); prev_display = display_text; 
+} } void setup() { Serial.begin(115200); 
+Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass); 
+Wire.begin(21,22); mpu.initialize(); 
+I2C_OLED.begin(18,19); 
+if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { Serial.println("OLED NOT FOUND"); 
+while(true); 
+} display.clearDisplay(); 
+display.setTextSize(1); 
+display.setTextColor(WHITE);
+display.setCursor(10,20);
+display.println("System Ready"); 
+display.display(); delay(2000); 
+pinMode(MQ2_DO,INPUT);
+pinMode(ENA,OUTPUT);
+pinMode(IN1, OUTPUT); 
+pinMode(IN2, OUTPUT); 
+pinMode(BUZZER,OUTPUT); 
+digitalWrite(IN1, HIGH); 
+digitalWrite(IN2, LOW);
+timer.setInterval(500L, sendData);
+}
+void loop() 
+{ 
+Blynk.run(); 
+timer.run(); 
+}
